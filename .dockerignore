@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+frontend/node_modules
+frontend/dist
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+*.db
+backend/facial_recognition.db
+backend/protected_storage/faces/*
+!backend/protected_storage/faces/.gitkeep
