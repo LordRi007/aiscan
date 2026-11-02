@@ -81,3 +81,4 @@ If you prefer deploying the React frontend on **Vercel** and the Python AI backe
 - **Biometric Security**: Biometric face embeddings are encrypted on-disk with Fernet AES-256 (`ENCRYPTION_KEY`).
 - **Headless Optimized**: Utilizes `opencv-python-headless` for zero GUI dependencies and minimal container size.
 - **Responsive Frame Streaming**: Client frames are compressed to 480px at 15 FPS, keeping CPU usage low and streaming silky smooth.
+

@@ -34,3 +34,4 @@ EXPOSE 8000
 
 # Start unified FastAPI server (serves API, WebSocket, and React frontend)
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+

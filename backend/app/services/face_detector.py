@@ -53,10 +53,17 @@ class FaceDetector:
         # OpenCV Haar Cascade with reliable local fallback
         cascade_path = os.path.join(os.path.dirname(__file__), '..', 'haarcascade_frontalface_default.xml')
         if not os.path.exists(cascade_path):
-            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        self._cascade = cv2.CascadeClassifier(cascade_path)
-        if self._cascade.empty():
-            logger.error(f"Failed to load Haar cascade from {cascade_path}")
+            haarcascades_dir = getattr(cv2, 'data', None)
+            haarcascades_path = getattr(haarcascades_dir, 'haarcascades', '') if haarcascades_dir else ''
+            cascade_path = os.path.join(haarcascades_path, 'haarcascade_frontalface_default.xml')
+
+        if hasattr(cv2, 'CascadeClassifier'):
+            self._cascade = cv2.CascadeClassifier(cascade_path)
+            if self._cascade.empty():
+                logger.error(f"Failed to load Haar cascade from {cascade_path}")
+        else:
+            logger.error("cv2.CascadeClassifier is not available in current OpenCV build.")
+            self._cascade = None
 
     def detect_faces(self, frame: np.ndarray) -> List[DetectedFace]:
         """
@@ -128,47 +135,48 @@ class FaceDetector:
                 logger.error(f"MediaPipe detection failed: {e}")
 
         # Fallback to OpenCV Haar Cascade if MediaPipe was unavailable
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        h, w = gray.shape
-        # Optimize for ultra-smooth 30+ FPS: scale grayscale down to max 360px for 6x faster Haar cascade
-        target_w = 360.0
-        if w > target_w:
-            scale = target_w / w
-            inv_scale = 1.0 / scale
-            small_gray = cv2.resize(gray, (int(target_w), int(h * scale)), interpolation=cv2.INTER_NEAREST)
-            min_size = (max(24, int(45 * scale)), max(24, int(45 * scale)))
-            raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=3, minSize=min_size)
-            faces = [
-                (int(sx * inv_scale), int(sy * inv_scale), int(sbw * inv_scale), int(sbh * inv_scale))
-                for (sx, sy, sbw, sbh) in raw_faces
-            ]
-        else:
-            faces = self._cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(45, 45))
+        if self._cascade is not None and not self._cascade.empty():
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            h, w = gray.shape
+            # Optimize for ultra-smooth 30+ FPS: scale grayscale down to max 360px for 6x faster Haar cascade
+            target_w = 360.0
+            if w > target_w:
+                scale = target_w / w
+                inv_scale = 1.0 / scale
+                small_gray = cv2.resize(gray, (int(target_w), int(h * scale)), interpolation=cv2.INTER_NEAREST)
+                min_size = (max(24, int(45 * scale)), max(24, int(45 * scale)))
+                raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=3, minSize=min_size)
+                faces = [
+                    (int(sx * inv_scale), int(sy * inv_scale), int(sbw * inv_scale), int(sbh * inv_scale))
+                    for (sx, sy, sbw, sbh) in raw_faces
+                ]
+            else:
+                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(45, 45))
 
-        for (x, y, box_w, box_h) in faces:
-            x, y, box_w, box_h = int(x), int(y), int(box_w), int(box_h)
-            x = max(0, min(x, w - 1))
-            y = max(0, min(y, h - 1))
-            box_w = max(1, min(box_w, w - x))
-            box_h = max(1, min(box_h, h - y))
+            for (x, y, box_w, box_h) in faces:
+                x, y, box_w, box_h = int(x), int(y), int(box_w), int(box_h)
+                x = max(0, min(x, w - 1))
+                y = max(0, min(y, h - 1))
+                box_w = max(1, min(box_w, w - x))
+                box_h = max(1, min(box_h, h - y))
 
-            face_crop = frame[y:y+box_h, x:x+box_w]
-            landmarks = {
-                "right_eye": (float(x + box_w * 0.3), float(y + box_h * 0.35)),
-                "left_eye": (float(x + box_w * 0.7), float(y + box_h * 0.35)),
-                "nose_tip": (float(x + box_w * 0.5), float(y + box_h * 0.55)),
-                "mouth_center": (float(x + box_w * 0.5), float(y + box_h * 0.75))
-            }
-            quality = self.assess_face_quality(face_crop, (box_w, box_h), landmarks)
-            detected_faces.append(
-                DetectedFace(
-                    bbox=(x, y, box_w, box_h),
-                    confidence=0.85,
-                    landmarks=landmarks,
-                    quality=quality,
-                    face_img=face_crop
+                face_crop = frame[y:y+box_h, x:x+box_w]
+                landmarks = {
+                    "right_eye": (float(x + box_w * 0.3), float(y + box_h * 0.35)),
+                    "left_eye": (float(x + box_w * 0.7), float(y + box_h * 0.35)),
+                    "nose_tip": (float(x + box_w * 0.5), float(y + box_h * 0.55)),
+                    "mouth_center": (float(x + box_w * 0.5), float(y + box_h * 0.75))
+                }
+                quality = self.assess_face_quality(face_crop, (box_w, box_h), landmarks)
+                detected_faces.append(
+                    DetectedFace(
+                        bbox=(x, y, box_w, box_h),
+                        confidence=0.85,
+                        landmarks=landmarks,
+                        quality=quality,
+                        face_img=face_crop
+                    )
                 )
-            )
 
         return detected_faces
 
