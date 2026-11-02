@@ -41,7 +41,15 @@ class TrackedFace:
         self.best_sharpness: float = detected_face.quality.get("sharpness", 0.0)
 
     def update(self, detected_face: DetectedFace):
-        self.bbox = detected_face.bbox
+        # Exponential smoothing (alpha = 0.72) to eliminate coordinate flicker and jitter
+        alpha = 0.72
+        old_x, old_y, old_w, old_h = self.bbox
+        new_x, new_y, new_w, new_h = detected_face.bbox
+        smooth_x = int(alpha * new_x + (1 - alpha) * old_x)
+        smooth_y = int(alpha * new_y + (1 - alpha) * old_y)
+        smooth_w = int(alpha * new_w + (1 - alpha) * old_w)
+        smooth_h = int(alpha * new_h + (1 - alpha) * old_h)
+        self.bbox = (smooth_x, smooth_y, smooth_w, smooth_h)
         self.landmarks = detected_face.landmarks
         self.quality = detected_face.quality
         self.face_img = detected_face.face_img
@@ -90,7 +98,7 @@ class MultiFaceTracker:
     Real-Time Multi-Object Tracker for Human Faces.
     Maintains independent track trajectories, prevents ID swaps, and handles occlusions.
     """
-    def __init__(self, max_missed_frames: int = 15, iou_threshold: float = 0.35, max_distance: float = 120.0):
+    def __init__(self, max_missed_frames: int = 15, iou_threshold: float = 0.25, max_distance: float = 140.0):
         self._next_id: int = 1
         self._active_tracks: Dict[int, TrackedFace] = {}
         self._max_missed_frames = max_missed_frames
@@ -112,7 +120,7 @@ class MultiFaceTracker:
             # Construct cost matrix using combination of IoU and Centroid Proximity
             active_track_ids = list(self._active_tracks.keys())
             
-            # Prioritize matching by best IoU first
+            # Prioritize matching by best IoU and centroid proximity
             matches: List[Tuple[float, int, int]] = [] # (score, track_id, detection_idx)
             for track_id in active_track_ids:
                 track = self._active_tracks[track_id]
@@ -121,9 +129,9 @@ class MultiFaceTracker:
                     dist = calculate_centroid_distance(track.bbox, det.bbox)
                     
                     # Acceptable if strong IoU or small centroid movement
-                    if iou >= self._iou_threshold or (dist <= self._max_distance and iou > 0.15):
+                    if iou >= self._iou_threshold or dist <= self._max_distance:
                         # Combine IoU and normalized distance into affinity score
-                        score = iou - (dist / (self._max_distance * 4.0))
+                        score = (iou * 2.0) - (dist / self._max_distance)
                         matches.append((score, track_id, det_idx))
 
             # Sort descending by match score
@@ -151,8 +159,8 @@ class MultiFaceTracker:
         for tid in dead_tracks:
             del self._active_tracks[tid]
 
-        # Return only currently active and visible tracks in this frame
-        return [track for track in self._active_tracks.values() if track.missed_frames == 0]
+        # Return currently active and visible tracks (persist for up to 5 missed frames to stop strobe flashing)
+        return [track for track in self._active_tracks.values() if track.missed_frames <= 5]
 
     def get_track(self, track_id: int) -> Optional[TrackedFace]:
         return self._active_tracks.get(track_id)

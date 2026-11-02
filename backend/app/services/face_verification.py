@@ -82,6 +82,10 @@ class FaceVerificationEngine:
         current_frame_embeddings: Dict[int, np.ndarray] = {}
 
         for face in tracked_faces:
+            # If this face had a temporary detection miss in the current frame, smoothly retain last state
+            if getattr(face, "missed_frames", 0) > 0:
+                continue
+
             # 1. Image Quality Qualification (Step 1)
             quality = face.quality
             is_quality_acceptable = quality.get("is_acceptable", False)

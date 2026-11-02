@@ -97,8 +97,9 @@ export default function FaceBoundingBox({
         transform: `translate3d(${left}px, ${top}px, 0)`,
         pointerEvents: 'none',
         willChange: 'transform, width, height',
+        transition: 'transform 80ms cubic-bezier(0.2, 0.8, 0.2, 1), width 80ms ease-out, height 80ms ease-out',
       }}
-      className={`border-2 rounded-xl shadow-lg ${style.border}`}
+      className={`border-2 rounded-xl shadow-lg transition-colors duration-200 ${style.border}`}
     >
       {/* Top Banner: Identity & Verification Status */}
       <div
