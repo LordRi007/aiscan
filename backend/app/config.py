@@ -34,10 +34,10 @@ class Settings(BaseModel):
     liveness_threshold: float = 0.50
     
     # Identity Verification & Similarity (Cosine similarity)
-    # 0.72+ -> Confident Existing Person match
-    # 0.58 - 0.72 -> Ambiguous/Uncertain Match (Needs manual review)
+    # 0.76+ -> Confident Existing Person match
+    # 0.58 - 0.76 -> Ambiguous/Uncertain Match (Needs manual review)
     # < 0.58 -> Potentially New Person
-    similarity_match_threshold: float = 0.72
+    similarity_match_threshold: float = 0.76
     similarity_uncertain_threshold: float = 0.58
     
     # Verification Engine

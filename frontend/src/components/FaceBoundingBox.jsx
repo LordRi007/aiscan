@@ -14,18 +14,38 @@ export default function FaceBoundingBox({
 
   const [bx, by, bw, bh] = face.bbox;
 
-  // Compute scaled coordinates relative to container
-  const scaleX = containerWidth / (naturalWidth || 640);
-  const scaleY = containerHeight / (naturalHeight || 360);
+  // Compute exact object-cover rendering geometry to eliminate aspect ratio drift
+  const videoW = naturalWidth || 640;
+  const videoH = naturalHeight || 360;
+  const videoAspect = videoW / (videoH || 1);
+  const containerAspect = containerWidth / (containerHeight || 1);
 
-  // If video is mirrored horizontally, flip the left coordinate accordingly
+  let renderWidth, renderHeight, offsetX, offsetY;
+
+  if (containerAspect > videoAspect) {
+    // Container is wider than video: video fills width and is vertically centered/cropped
+    renderWidth = containerWidth;
+    renderHeight = containerWidth / videoAspect;
+    offsetX = 0;
+    offsetY = (renderHeight - containerHeight) / 2;
+  } else {
+    // Container is taller than video: video fills height and is horizontally centered/cropped
+    renderHeight = containerHeight;
+    renderWidth = containerHeight * videoAspect;
+    offsetY = 0;
+    offsetX = (renderWidth - containerWidth) / 2;
+  }
+
+  const scale = renderWidth / videoW;
+
+  // Mirror-aware pixel-perfect composite coordinates
   const left = isMirrored
-    ? Math.round((naturalWidth - bx - bw) * scaleX)
-    : Math.round(bx * scaleX);
+    ? Math.round((videoW - bx - bw) * scale - offsetX)
+    : Math.round(bx * scale - offsetX);
 
-  const top = Math.round(by * scaleY);
-  const width = Math.round(bw * scaleX);
-  const height = Math.round(bh * scaleY);
+  const top = Math.round(by * scale - offsetY);
+  const width = Math.round(bw * scale);
+  const height = Math.round(bh * scale);
 
   // Status-based colors according to specification
   const getStyleProps = () => {

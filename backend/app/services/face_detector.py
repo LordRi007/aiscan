@@ -144,13 +144,13 @@ class FaceDetector:
                 scale = target_w / w
                 inv_scale = 1.0 / scale
                 small_gray = cv2.resize(gray, (int(target_w), int(h * scale)), interpolation=cv2.INTER_NEAREST)
-                raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.13, minNeighbors=3, minSize=(28, 28))
+                raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.10, minNeighbors=2, minSize=(24, 24))
                 faces = [
                     (int(sx * inv_scale), int(sy * inv_scale), int(sbw * inv_scale), int(sbh * inv_scale))
                     for (sx, sy, sbw, sbh) in raw_faces
                 ]
             else:
-                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.13, minNeighbors=3, minSize=(28, 28))
+                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.10, minNeighbors=2, minSize=(24, 24))
 
             for (x, y, box_w, box_h) in faces:
                 x, y, box_w, box_h = int(x), int(y), int(box_w), int(box_h)
