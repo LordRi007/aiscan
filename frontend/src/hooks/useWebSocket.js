@@ -1,5 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+export function getBaseWsUrl(url = '/ws/camera') {
+  if (url.startsWith('ws://') || url.startsWith('wss://')) {
+    return url;
+  }
+
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('visionface_backend_url');
+    if (saved) {
+      const clean = saved.replace(/^http/, 'ws').replace(/\/+$/, '');
+      return `${clean}${url}`;
+    }
+
+    if (window.location.port === '5173' || window.location.port === '3000') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.hostname}:8000${url}`;
+    }
+  }
+
+  const customWs = typeof import.meta !== 'undefined' && import.meta.env?.VITE_WS_BASE_URL;
+  if (customWs) {
+    return `${customWs.replace(/\/+$/, '')}${url}`;
+  }
+
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8000';
+  return `${protocol}//${host}${url}`;
+}
+
 export function useWebSocket(url, onMessageCallback) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
@@ -8,17 +36,10 @@ export function useWebSocket(url, onMessageCallback) {
   const shouldReconnectRef = useRef(true);
 
   const connect = useCallback(() => {
-    // Determine ws protocol and host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // When running under Vite dev server (port 5173 or 3000), connect directly to FastAPI port 8000
-    // to bypass Vite's dev server proxy which drops high-throughput video frames
-    const isDev = window.location.port === '5173' || window.location.port === '3000';
-    const customWs = typeof import.meta !== 'undefined' && import.meta.env?.VITE_WS_BASE_URL;
-    const host = isDev ? `${window.location.hostname}:8000` : window.location.host;
-    const wsUrl = url.startsWith('ws') ? url : (customWs ? `${customWs}${url}` : `${protocol}//${host}${url}`);
+    const wsUrl = getBaseWsUrl(url);
 
     try {
-      console.log(`[WebSocket] Connecting directly to ${wsUrl}...`);
+      console.log(`[WebSocket] Connecting to ${wsUrl}...`);
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 

@@ -22,6 +22,9 @@ export default function CameraSettings({
   const [selectedSource, setSelectedSource] = useState(cameraStatus?.source || 1);
   const [ipCameraUrl, setIpCameraUrl] = useState('');
   const [autoReconnect, setAutoReconnect] = useState(true);
+  const [backendUrl, setBackendUrl] = useState(() => {
+    return localStorage.getItem('visionface_backend_url') || '';
+  });
 
   // Calibration thresholds
   const [matchThreshold, setMatchThreshold] = useState(72);
@@ -38,8 +41,16 @@ export default function CameraSettings({
   };
 
   const handleSaveSettings = () => {
+    if (backendUrl.trim()) {
+      localStorage.setItem('visionface_backend_url', backendUrl.trim());
+    } else {
+      localStorage.removeItem('visionface_backend_url');
+    }
     setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    setTimeout(() => {
+      setSavedSuccess(false);
+      window.location.reload();
+    }, 1200);
   };
 
   return (
@@ -63,6 +74,38 @@ export default function CameraSettings({
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Rescan Hardware</span>
         </button>
+      </div>
+
+      {/* Cloud & Remote Backend Connection (Vercel / Cloud Deployments) */}
+      <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+            <Wifi className="w-4 h-4 text-indigo-500" />
+            Cloud AI Backend Connection (Vercel Deployment)
+          </h3>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            {backendUrl ? 'Custom Backend' : 'Default Auto-Detect'}
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          When deploying this frontend on Vercel, connect it to your live FastAPI backend server (e.g. on Render or Railway).
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={backendUrl}
+            onChange={(e) => setBackendUrl(e.target.value)}
+            placeholder="e.g. https://aiscan.onrender.com (or leave empty for auto-detect)"
+            className="flex-1 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono"
+          />
+          <button
+            onClick={handleSaveSettings}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save & Apply</span>
+          </button>
+        </div>
       </div>
 
       {/* Camera Selection Section */}

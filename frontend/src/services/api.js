@@ -1,10 +1,25 @@
-const isDev = typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000');
-const customApi = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL;
-const BASE_URL = isDev ? `http://${window.location.hostname}:8000/api` : (customApi || '/api');
+export function getBaseApiUrl() {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('visionface_backend_url');
+    if (saved) return `${saved.replace(/\/+$/, '')}/api`;
+
+    if (window.location.port === '5173' || window.location.port === '3000') {
+      return `http://${window.location.hostname}:8000/api`;
+    }
+  }
+
+  const customApi = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL;
+  if (customApi) return customApi.replace(/\/+$/, '');
+
+  return '/api';
+}
+
+const BASE_URL = getBaseApiUrl();
 
 export async function fetchJson(endpoint, options = {}) {
   try {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
+    const baseUrl = getBaseApiUrl();
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
