@@ -70,12 +70,13 @@ export default function FaceBoundingBox({
     <div
       style={{
         position: 'absolute',
-        left: `${left}px`,
-        top: `${top}px`,
+        top: 0,
+        left: 0,
         width: `${width}px`,
         height: `${height}px`,
+        transform: `translate3d(${left}px, ${top}px, 0)`,
         pointerEvents: 'none',
-        willChange: 'left, top, width, height',
+        willChange: 'transform, width, height',
       }}
       className={`border-2 rounded-xl shadow-lg ${style.border}`}
     >

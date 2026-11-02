@@ -130,7 +130,7 @@ export default function App() {
           setSelectedPersonId(null);
           setCurrentPage(page);
         }}
-        cameraActive={cameraStatus?.is_running}
+        cameraActive={Boolean(cameraStatus?.is_running || lastWsMessage?.telemetry?.is_running)}
       />
 
       {/* Main Content Area */}
@@ -145,6 +145,7 @@ export default function App() {
           onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
           onNavigate={(page) => setCurrentPage(page)}
           activeFaceCount={lastWsMessage?.faces?.length || 0}
+          telemetry={lastWsMessage?.telemetry}
         />
 
         <main className="flex-1 overflow-y-auto">

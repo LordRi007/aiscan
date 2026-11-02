@@ -12,9 +12,10 @@ export default function Header({
   onToggleDarkMode,
   onNavigate,
   activeFaceCount = 0,
+  telemetry = null,
 }) {
-  const isRunning = cameraStatus?.is_running;
-  const isExternal = cameraStatus?.is_external;
+  const isRunning = Boolean(cameraStatus?.is_running || telemetry?.is_running);
+  const isExternal = cameraStatus?.is_external ?? telemetry?.is_external;
 
   return (
     <header className="h-16 bg-white dark:bg-[#111827] border-b border-gray-200 dark:border-gray-800 px-6 flex items-center justify-between transition-colors duration-200">

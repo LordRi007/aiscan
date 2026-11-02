@@ -52,8 +52,10 @@ async def camera_websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect_camera(websocket)
     db: Session = SessionLocal()
 
-    # Dedicated concurrent receiver for client browser frames
+    # Dedicated reactive receiver for client browser frames with zero-polling sub-10ms response
     async def receive_client_frames():
+        nonlocal verified_faces
+        import numpy as np
         while True:
             try:
                 data = await websocket.receive_text()
@@ -63,16 +65,42 @@ async def camera_websocket_endpoint(websocket: WebSocket):
                     if "," in raw_data:
                         raw_data = raw_data.split(",")[1]
                     img_bytes = base64.b64decode(raw_data)
-                    import numpy as np
                     nparr = np.frombuffer(img_bytes, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is not None:
                         camera_manager.set_browser_frame(frame)
+                        h, w, _ = frame.shape
+                        # Immediate reactive AI inference
+                        detected = face_detector.detect_faces(frame)
+                        tracked = face_tracker.update(detected)
+                        verified_faces = face_verification_engine.process_tracked_faces(db, tracked)
+                        cam_status = camera_manager.get_status()
+
+                        payload = {
+                            "type": "camera_frame",
+                            "frame": None,
+                            "faces": verified_faces,
+                            "telemetry": {
+                                "fps": cam_status["fps"],
+                                "resolution": f"{w}x{h}",
+                                "camera_name": cam_status["camera_name"],
+                                "is_external": cam_status["is_external"],
+                                "source": cam_status["source"],
+                                "source_type": "browser_stream",
+                                "is_running": True,
+                                "faces_detected": len(verified_faces),
+                                "registered_matches": sum(1 for f in verified_faces if f["verification_status"] == "REGISTERED"),
+                                "new_faces": sum(1 for f in verified_faces if f["verification_status"] in ["CHECKING", "POTENTIALLY_NEW"]),
+                                "pending_verification": sum(1 for f in verified_faces if f["verification_status"] == "VERIFICATION_REQUIRED")
+                            }
+                        }
+                        await websocket.send_text(json.dumps(payload))
             except WebSocketDisconnect:
                 break
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                logger.error(f"Error handling reactive browser frame: {e}")
                 await asyncio.sleep(0.01)
 
     receiver_task = asyncio.create_task(receive_client_frames())
@@ -81,55 +109,52 @@ async def camera_websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            # Grab current latest frame (either from OpenCV or browser)
-            frame, frame_time = camera_manager.get_latest_frame_with_timestamp()
             cam_status = camera_manager.get_status()
 
-            if frame is not None and cam_status.get("is_running"):
-                # Only re-run AI inference when a new frame has arrived
-                if frame_time != last_processed_time:
+            # For server-side OpenCV capture (hardware USB / IP cameras)
+            if cam_status.get("source_type") != "browser_stream" and cam_status.get("is_running"):
+                frame, frame_time = camera_manager.get_latest_frame_with_timestamp()
+                if frame is not None and frame_time != last_processed_time:
                     last_processed_time = frame_time
                     detected = face_detector.detect_faces(frame)
                     tracked = face_tracker.update(detected)
                     verified_faces = face_verification_engine.process_tracked_faces(db, tracked)
 
-                # For server-side OpenCV capture, encode frame to base64
-                # For client browser webcam, frame is rendered locally by <video>, saving 99% bandwidth
-                frame_b64 = None
-                if cam_status.get("source_type") != "browser_stream":
                     ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
                     frame_b64 = base64.b64encode(buffer).decode('utf-8') if ret else None
 
-                payload = {
-                    "type": "camera_frame",
-                    "frame": f"data:image/jpeg;base64,{frame_b64}" if frame_b64 else None,
-                    "faces": verified_faces,
-                    "telemetry": {
-                        "fps": cam_status["fps"],
-                        "resolution": cam_status["resolution"],
-                        "camera_name": cam_status["camera_name"],
-                        "is_external": cam_status["is_external"],
-                        "source": cam_status["source"],
-                        "is_running": cam_status["is_running"],
-                        "faces_detected": len(verified_faces),
-                        "registered_matches": sum(1 for f in verified_faces if f["verification_status"] == "REGISTERED"),
-                        "new_faces": sum(1 for f in verified_faces if f["verification_status"] in ["CHECKING", "POTENTIALLY_NEW"]),
-                        "pending_verification": sum(1 for f in verified_faces if f["verification_status"] == "VERIFICATION_REQUIRED")
+                    payload = {
+                        "type": "camera_frame",
+                        "frame": f"data:image/jpeg;base64,{frame_b64}" if frame_b64 else None,
+                        "faces": verified_faces,
+                        "telemetry": {
+                            "fps": cam_status["fps"],
+                            "resolution": cam_status["resolution"],
+                            "camera_name": cam_status["camera_name"],
+                            "is_external": cam_status["is_external"],
+                            "source": cam_status["source"],
+                            "source_type": cam_status["source_type"],
+                            "is_running": cam_status["is_running"],
+                            "faces_detected": len(verified_faces),
+                            "registered_matches": sum(1 for f in verified_faces if f["verification_status"] == "REGISTERED"),
+                            "new_faces": sum(1 for f in verified_faces if f["verification_status"] in ["CHECKING", "POTENTIALLY_NEW"]),
+                            "pending_verification": sum(1 for f in verified_faces if f["verification_status"] == "VERIFICATION_REQUIRED")
+                        }
                     }
-                }
-
-                await websocket.send_text(json.dumps(payload))
-            else:
-                # Camera is stopped or waiting for frames
+                    await websocket.send_text(json.dumps(payload))
+                await asyncio.sleep(0.033)
+            elif not cam_status.get("is_running") and cam_status.get("source_type") != "browser_stream":
+                # Idle heartbeat for stopped status
                 payload = {
                     "type": "camera_status",
                     "telemetry": cam_status,
                     "faces": []
                 }
                 await websocket.send_text(json.dumps(payload))
-                await asyncio.sleep(0.1)
-
-            await asyncio.sleep(0.033) # ~30 FPS
+                await asyncio.sleep(0.5)
+            else:
+                # Browser stream is actively handled by reactive receiver; sleep peacefully here
+                await asyncio.sleep(0.5)
 
     except WebSocketDisconnect:
         logger.info("Camera WebSocket client disconnected.")

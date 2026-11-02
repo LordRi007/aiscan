@@ -39,9 +39,15 @@ export default function LiveScanner({
   const telemetry = lastWsMessage?.telemetry || cameraStatus || {};
   const frameSrc = lastWsMessage?.frame || null;
 
-  // Track running state reliably without getting stuck
-  const isRunning = Boolean(cameraStatus?.is_running ?? telemetry?.is_running);
-  const isClientMode = (telemetry?.source_type === 'browser_stream') || (cameraStatus?.source_type === 'browser_stream');
+  // Track running state reliably without getting stuck or desynchronizing
+  const isRunning = Boolean(cameraStatus?.is_running || telemetry?.is_running);
+  const isClientMode =
+    telemetry?.source_type === 'browser_stream' ||
+    cameraStatus?.source_type === 'browser_stream' ||
+    String(cameraStatus?.source).startsWith('browser_') ||
+    String(telemetry?.source).startsWith('browser_') ||
+    String(cameraStatus?.source) === '-1' ||
+    String(telemetry?.source) === '-1';
 
   // Counts
   const totalFaces = faces.length;

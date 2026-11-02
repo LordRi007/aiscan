@@ -86,8 +86,17 @@ class FaceVerificationEngine:
             quality = face.quality
             is_quality_acceptable = quality.get("is_acceptable", False)
 
+            # Determine if this face is already stably identified to avoid redundant per-frame heavy compute
+            is_already_registered = (getattr(face, "verification_status", None) == "REGISTERED")
+            should_recheck_identity = (face.frames_tracked % 12 == 0) or not is_already_registered
+
             # 2. Extract current face embedding (Step 3)
-            current_emb = face_recognition_engine.extract_embedding(face.face_img, face.landmarks)
+            if should_recheck_identity or not hasattr(face, "_cached_emb") or face._cached_emb is None:
+                current_emb = face_recognition_engine.extract_embedding(face.face_img, face.landmarks)
+                face._cached_emb = current_emb
+            else:
+                current_emb = face._cached_emb
+
             current_frame_embeddings[face.track_id] = current_emb
 
             # Add to collected embeddings history for multi-frame proof
@@ -96,11 +105,15 @@ class FaceVerificationEngine:
                 if len(face.collected_embeddings) > 15:
                     face.collected_embeddings.pop(0)
 
-            # 3. Analyze tentative facial expression with rich emoji
+            # 3. Analyze tentative facial expression with rich emoji (always real-time 30+ FPS)
             expr_result = expression_detector.analyze_expression(face.face_img, face.landmarks)
             face.expression = expr_result["category"]
             face.expression_emoji = expr_result.get("emoji", "😐")
             face.expression_confidence = expr_result["confidence"]
+
+            if is_already_registered and not should_recheck_identity:
+                # Retain verified identity and continue with zero database latency
+                continue
 
             # 4. Check presentation authenticity / liveness (Step 2)
             liveness_res = liveness_detector.check_liveness(face.face_img)

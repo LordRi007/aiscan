@@ -138,20 +138,19 @@ class FaceDetector:
         if self._cascade is not None and not self._cascade.empty():
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             h, w = gray.shape
-            # Optimize for ultra-smooth 30+ FPS: scale grayscale down to max 360px for 6x faster Haar cascade
+            # Ultra-fast 30+ FPS Haar cascade execution: scale grayscale to 360px with tuned scaleFactor
             target_w = 360.0
             if w > target_w:
                 scale = target_w / w
                 inv_scale = 1.0 / scale
                 small_gray = cv2.resize(gray, (int(target_w), int(h * scale)), interpolation=cv2.INTER_NEAREST)
-                min_size = (max(24, int(45 * scale)), max(24, int(45 * scale)))
-                raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.1, minNeighbors=3, minSize=min_size)
+                raw_faces = self._cascade.detectMultiScale(small_gray, scaleFactor=1.13, minNeighbors=3, minSize=(28, 28))
                 faces = [
                     (int(sx * inv_scale), int(sy * inv_scale), int(sbw * inv_scale), int(sbh * inv_scale))
                     for (sx, sy, sbw, sbh) in raw_faces
                 ]
             else:
-                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(45, 45))
+                faces = self._cascade.detectMultiScale(gray, scaleFactor=1.13, minNeighbors=3, minSize=(28, 28))
 
             for (x, y, box_w, box_h) in faces:
                 x, y, box_w, box_h = int(x), int(y), int(box_w), int(box_h)
