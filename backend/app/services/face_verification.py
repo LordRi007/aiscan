@@ -249,6 +249,14 @@ class FaceVerificationEngine:
 
         # Format output telemetry for client / websocket
         for face in tracked_faces:
+            # Strictly filter out non-face false positives (e.g. background window/furniture artifacts)
+            # Only display faces that are:
+            # 1) Confirmed registered / newly registered, OR
+            # 2) Candidate human faces that actually pass facial quality qualification
+            if face.verification_status not in ["REGISTERED", "NEW_REGISTERED"]:
+                if not face.quality.get("is_acceptable", False) or face.confidence < 0.60:
+                    continue
+
             # Color logic according to Section 3:
             # Registered: Green
             # Unmatched / Checking: Yellow
